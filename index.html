@@ -130,6 +130,11 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--bs-black
 input[type=range]{-webkit-appearance:none;width:100%;height:2px;background:var(--bs-grey-2);border-radius:99px;margin:18px 0 8px}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:var(--bs-blue);cursor:pointer}
 input[type=range]::-moz-range-thumb{width:22px;height:22px;border:none;border-radius:50%;background:var(--bs-blue);cursor:pointer}
+.split-pct-row{display:flex;justify-content:space-between;align-items:flex-end}
+.split-pct-name{font-family:'PPNouvelleMontrealMono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--bs-grey-1);display:block;margin-bottom:4px}
+.split-pct-val{font-size:24px;font-weight:700;display:block;line-height:1}
+#sc-slider::-webkit-slider-thumb{background:var(--bs-black)}
+#sc-slider::-moz-range-thumb{background:var(--bs-black)}
 
 /* nav */
 nav{position:fixed;bottom:0;left:0;right:0;background:var(--bs-white);border-top:1px solid var(--bs-grey-2);z-index:30}
@@ -250,10 +255,17 @@ nav{position:fixed;bottom:0;left:0;right:0;background:var(--bs-white);border-top
       <button data-m="custom">Custom</button>
     </div>
     <div id="split-custom" style="display:none;margin-bottom:14px">
-      <div class="inline2">
-        <label class="field"><span class="label" id="sc-l1">Share 1 %</span><input type="number" id="sc-1" min="0" max="100"></label>
-        <label class="field"><span class="label" id="sc-l2">Share 2 %</span><input type="number" id="sc-2" min="0" max="100"></label>
+      <div class="split-pct-row">
+        <div>
+          <span class="split-pct-name" id="sc-l1">Share 1</span>
+          <span class="split-pct-val mono" id="sc-pct1">50%</span>
+        </div>
+        <div style="text-align:right">
+          <span class="split-pct-name" id="sc-l2">Share 2</span>
+          <span class="split-pct-val mono" id="sc-pct2">50%</span>
+        </div>
       </div>
+      <input type="range" id="sc-slider" min="0" max="100" value="50">
     </div>
 
     <div class="card dark" style="margin-bottom:18px" id="joint-summary"></div>
@@ -950,11 +962,24 @@ function renderSplitSeg(){
   if(cw){
     cw.style.display = S.settings.splitMode==='custom' ? 'block':'none';
     const p=S.settings.splitPct||[50,50];
-    $('#sc-l1').textContent=(S.settings.people[0]?.name||'P1')+' %';
-    $('#sc-l2').textContent=(S.settings.people[1]?.name||'P2')+' %';
-    $('#sc-1').value=p[0]; $('#sc-2').value=p[1];
-    $('#sc-1').oninput=e=>{S.settings.splitPct=[parseFloat(e.target.value)||0,S.settings.splitPct?.[1]||0];saveSettings();renderJointTotals();};
-    $('#sc-2').oninput=e=>{S.settings.splitPct=[S.settings.splitPct?.[0]||0,parseFloat(e.target.value)||0];saveSettings();renderJointTotals();};
+    const sum=(p[0]||0)+(p[1]||0);
+    const pct1 = sum>0 ? Math.round(p[0]/sum*100) : 50;
+    $('#sc-l1').textContent=S.settings.people[0]?.name||'P1';
+    $('#sc-l2').textContent=S.settings.people[1]?.name||'P2';
+    $('#sc-pct1').textContent=pct1+'%';
+    $('#sc-pct2').textContent=(100-pct1)+'%';
+    const slider=$('#sc-slider');
+    slider.value=pct1;
+    slider.style.background=`linear-gradient(to right,var(--bs-black) ${pct1}%,var(--bs-grey-2) ${pct1}%)`;
+    slider.oninput=e=>{
+      const v=parseInt(e.target.value);
+      $('#sc-pct1').textContent=v+'%';
+      $('#sc-pct2').textContent=(100-v)+'%';
+      slider.style.background=`linear-gradient(to right,var(--bs-black) ${v}%,var(--bs-grey-2) ${v}%)`;
+      S.settings.splitPct=[v,100-v];
+      saveSettings();
+      renderJointTotals();
+    };
   }
 }
 function jointRow(name,valueGetter,valueSetter,suggested,onDel,onRename,note,actual){

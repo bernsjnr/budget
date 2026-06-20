@@ -171,6 +171,17 @@ nav{position:fixed;bottom:0;left:0;right:0;background:var(--bs-white);border-top
 .kpi-line .k{color:var(--bs-grey-1)}
 .kpi-line .v{font-weight:700;font-variant-numeric:tabular-nums}
 
+/* merchant drill-down */
+.merch-row{border-bottom:1px solid var(--bs-grey-2)}
+.merch-row:last-child{border-bottom:none}
+.merch-head{display:flex;align-items:center;justify-content:space-between;padding:11px 0;cursor:pointer}
+.merch-plus{width:22px;height:22px;border-radius:50%;border:1px solid var(--bs-grey-2);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--bs-grey-1);flex:none}
+.merch-row.open .merch-plus{border-color:var(--bs-black);color:var(--bs-black)}
+.merch-detail{display:none;padding:0 0 10px 0}
+.merch-row.open .merch-detail{display:block}
+.merch-txn{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;padding:7px 9px;font-size:12px;background:var(--bs-grey-3);border-radius:5px;margin-bottom:5px;align-items:center}
+.merch-txn:last-child{margin-bottom:0}
+
 /* wizard */
 .wiz{position:fixed;inset:0;background:var(--bs-white);z-index:35;display:none;flex-direction:column}
 .wiz.on{display:flex}
@@ -304,6 +315,9 @@ nav{position:fixed;bottom:0;left:0;right:0;background:var(--bs-white);border-top
 
       <div class="row" style="margin:18px 0 6px"><span class="label" style="margin:0">By category</span></div>
       <div class="card" id="sp-cats"></div>
+
+      <div class="row" style="margin:18px 0 6px"><span class="label" style="margin:0">By merchant</span></div>
+      <div class="card" id="sp-merch"></div>
 
       <div class="row" style="margin:18px 0 6px"><span class="label" style="margin:0">Where you can save</span></div>
       <div class="card" id="sp-save"></div>
@@ -762,13 +776,14 @@ function analyseCSV(text){
   const cAmt=ix('amount'), cOut=ix('money out'), cIn=ix('money in'),
         cCat=ix('category'), cDate=ix('date'), cName=ix('name')>=0?ix('name'):ix('description'),
         cType=ix('type');
-  let totalOut=0,totalIn=0;const cat={};const months=new Set();
+  let totalOut=0,totalIn=0;const cat={};const merch={};const months=new Set();
   for(let r=1;r<rows.length;r++){
     const row=rows[r];if(!row.length||row.every(c=>!c.trim()))continue;
     let amt=0;
     if(cAmt>=0&&row[cAmt]!==''&&row[cAmt]!=null) amt=parseFloat((row[cAmt]||'').replace(/[£,]/g,''))||0;
     else{const o=parseFloat((row[cOut]||'').replace(/[£,]/g,''))||0;const inn=parseFloat((row[cIn]||'').replace(/[£,]/g,''))||0;amt=inn-Math.abs(o);}
     const category=(cCat>=0?row[cCat]:'')||'General';
+    const merchant=(cName>=0?row[cName]:'')||'Unknown';
     const dateStr=cDate>=0?row[cDate]:'';
     const m=dateStr.match(/(\d{2})\/(\d{2})\/(\d{4})/);
     if(m)months.add(m[3]+'-'+m[2]);
@@ -777,14 +792,18 @@ function analyseCSV(text){
     if(EXCLUDE_CATS.includes(lc))continue; // skip transfers/pot/savings on the spend side
     const spend=Math.abs(amt);totalOut+=spend;
     cat[category]=(cat[category]||0)+spend;
+    if(!merch[merchant]) merch[merchant]={total:0,txns:[]};
+    merch[merchant].total+=spend;
+    merch[merchant].txns.push({date:dateStr,amount:spend,category});
   }
   const byCat=Object.entries(cat).map(([k,v])=>({k,v})).sort((a,b)=>b.v-a.v);
+  const byMerchant=Object.entries(merch).map(([k,v])=>({k,v:v.total,txns:v.txns.sort((a,b)=>b.amount-a.amount)})).sort((a,b)=>b.v-a.v);
   const monthsCovered=Math.max(1,months.size);
   const di=daysInfo();
   const perMonthOut=totalOut/monthsCovered;
   // projection only meaningful if single month; else use average
   const projected= monthsCovered<=1 ? Math.round(totalOut/di.elapsed*di.total) : Math.round(perMonthOut);
-  return {byCat,totalOut:Math.round(totalOut),totalIn:Math.round(totalIn),monthsCovered,projected,perMonthOut:Math.round(perMonthOut),di};
+  return {byCat,byMerchant,totalOut:Math.round(totalOut),totalIn:Math.round(totalIn),monthsCovered,projected,perMonthOut:Math.round(perMonthOut),di};
 }
 function buildRecommendation(c){
   // average per category across months covered
@@ -818,6 +837,8 @@ function renderSpending(){
   const max=csv.byCat[0]?.v||1;
   csv.byCat.forEach(t=>cats.appendChild(barRow(t.k,Math.round(t.v/max*100),fmt(t.v))));
 
+  renderMerchants();
+
   recommended=buildRecommendation(csv);
   const save=$('#sp-save');save.innerHTML='';
   const opps=recommended.recs.filter(r=>r.saving>0).slice(0,5);
@@ -846,6 +867,31 @@ function handleCsvText(text){
   catch(e){ toast('Could not read that CSV'); }
 }
 function clearCsv(){csv=null;recommended=null;$('#ai-out').innerHTML='';renderSpending();renderOverview();}
+
+function renderMerchants(){
+  const c=$('#sp-merch'); if(!c)return; c.innerHTML='';
+  if(!csv||!csv.byMerchant||!csv.byMerchant.length){c.innerHTML='<div class="empty">No merchants found in this CSV.</div>';return;}
+  csv.byMerchant.forEach((m,i)=>{
+    const row=el('div','merch-row');
+    row.innerHTML=`<div class="merch-head">
+        <div><div class="l-name">${escapeHtml(m.k)}</div><div class="l-meta mono">${m.txns.length} transaction${m.txns.length>1?'s':''}</div></div>
+        <div style="display:flex;align-items:center;gap:10px"><span class="l-val">${fmt(m.v)}</span><span class="merch-plus">+</span></div>
+      </div>
+      <div class="merch-detail" id="merch-detail-${i}"></div>`;
+    const head=row.querySelector('.merch-head');
+    const plus=row.querySelector('.merch-plus');
+    const detail=row.querySelector('.merch-detail');
+    head.onclick=()=>{
+      const open=row.classList.toggle('open');
+      plus.textContent=open?'–':'+';
+      if(open && !detail.dataset.filled){
+        detail.innerHTML=m.txns.map(t=>`<div class="merch-txn"><span class="mono" style="color:var(--bs-grey-1)">${escapeHtml(t.date||'')}</span><span class="mono" style="color:var(--bs-grey-1)">${escapeHtml(t.category||'')}</span><span style="font-weight:700">${fmt(t.amount)}</span></div>`).join('');
+        detail.dataset.filled='1';
+      }
+    };
+    c.appendChild(row);
+  });
+}
 function saveMonth(){
   if(!csv){toast('Load a CSV first');return;}
   const m=new Date().toISOString().slice(0,7);

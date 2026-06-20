@@ -187,10 +187,27 @@ nav{position:fixed;bottom:0;left:0;right:0;background:var(--bs-white);border-top
 .wiz-foot{display:grid;grid-template-columns:1fr 2fr;gap:10px;padding:12px 0 calc(16px + env(safe-area-inset-bottom));border-top:1px solid var(--bs-grey-2)}
 .wiz-list .line .l-name{font-size:14px}
 .wiz-mini{display:flex;align-items:center;gap:8px;margin-top:10px}
+
+/* gate */
+.gate{position:fixed;inset:0;background:var(--bs-white);z-index:50;display:none;align-items:center;justify-content:center;padding:24px}
+.gate.on{display:flex}
+.gate-in{max-width:320px;width:100%}
 </style>
 </head>
 <body>
+<div class="gate" id="gate">
+  <div class="gate-in">
+    <div class="brand" style="margin-bottom:22px;justify-content:center;display:flex"><span class="logo"></span><b>Budget</b></div>
+    <h2 style="font-size:21px;margin-bottom:6px;text-align:center">Enter passcode</h2>
+    <p class="lede" style="margin-bottom:18px;text-align:center">This budget is private.</p>
+    <input type="tel" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="4" id="gate-input" placeholder="••••" style="text-align:center;font-size:28px;letter-spacing:0.4em;font-weight:700">
+    <button class="btn" id="gate-btn" onclick="tryGate()" style="margin-top:14px">Unlock</button>
+    <div id="gate-err" class="note" style="display:none;margin-top:10px;text-align:center"><span class="flag">Wrong passcode.</span> Try again.</div>
+  </div>
+</div>
+
 <div class="app">
+
   <header>
     <div class="brand"><span class="logo"></span><b>Budget</b></div>
     <div class="who" id="who"></div>
@@ -199,44 +216,67 @@ nav{position:fixed;bottom:0;left:0;right:0;background:var(--bs-white);border-top
   <!-- OVERVIEW -->
   <section id="s-overview" class="on">
     <div class="card dark">
-      <span class="label">Net position</span>
+      <span class="label" style="color:#9aa0a6">Overall net</span>
       <div class="figure" id="ov-net">—</div>
-      <div class="sub" id="ov-net-sub" style="margin-top:7px">Accounts minus what you owe</div>
+      <div class="sub" id="ov-net-sub" style="margin-top:7px;color:#9aa0a6">Income minus joint expenses</div>
     </div>
     <div class="grid2">
-      <div class="card"><span class="label">In this period</span><div class="figure sm blue" id="ov-in">—</div></div>
-      <div class="card"><span class="label">Out this period</span><div class="figure sm" id="ov-out">—</div></div>
-    </div>
-    <div class="card">
-      <div class="row"><span class="label" style="margin:0">Goals</span><button class="tiny-act" onclick="go('goals')">Open →</button></div>
-      <div id="ov-goals" style="margin-top:10px"></div>
-    </div>
-    <div class="card">
-      <div class="row"><span class="label" style="margin:0">Top spending</span><button class="tiny-act" onclick="go('spending')">Open →</button></div>
-      <div id="ov-cats" style="margin-top:12px"></div>
+      <div class="card"><span class="label">Total income</span><div class="figure sm blue" id="ov-in">—</div></div>
+      <div class="card"><span class="label">Total expenses</span><div class="figure sm" id="ov-out">—</div></div>
     </div>
   </section>
 
-  <!-- BALANCES -->
-  <section id="s-balances">
-    <div class="sec-title">Balances</div>
-    <div class="sec-sub">Screenshot Monzo, or add by hand.</div>
-
-    <div class="btn-stack" style="margin-bottom:16px">
-      <button class="btn" onclick="openShot('account')">Screenshot balances</button>
-      <button class="btn ghost sm" style="width:100%" onclick="openAccount()">Add account manually</button>
+  <!-- JOINT -->
+  <section id="s-joint">
+    <div class="row" style="align-items:flex-start">
+      <div><div class="sec-title">Joint</div><div class="sec-sub">What goes in, what's left over.</div></div>
+      <button class="btn sm" onclick="openJointItem()" style="margin-top:6px">+ New</button>
     </div>
 
-    <span class="label">Accounts &amp; pots</span>
-    <div class="card" id="acc-list"></div>
+    <div class="seg" id="split-seg">
+      <button data-m="income">By income</button>
+      <button data-m="equal">Equal split</button>
+      <button data-m="custom">Custom</button>
+    </div>
+    <div id="split-custom" style="display:none;margin-bottom:14px">
+      <div class="inline2">
+        <label class="field"><span class="label" id="sc-l1">Share 1 %</span><input type="number" id="sc-1" min="0" max="100"></label>
+        <label class="field"><span class="label" id="sc-l2">Share 2 %</span><input type="number" id="sc-2" min="0" max="100"></label>
+      </div>
+    </div>
 
-    <div class="row" style="margin:18px 0 8px"><span class="label" style="margin:0">Loans &amp; debt</span><button class="tiny-act" onclick="openLoan()">+ Add loan</button></div>
-    <div class="card" id="loan-list"></div>
-    <button class="btn ghost sm" style="width:100%;margin-top:4px" onclick="openShot('loan')">Screenshot a loan statement</button>
+    <div class="card dark" style="margin-bottom:18px" id="joint-summary"></div>
+    <div class="card" style="margin-bottom:18px" id="suggested-summary"></div>
+
+    <div class="row" style="margin-bottom:6px"><span class="label" style="margin:0">Income</span><span class="mono" id="inc-total" style="font-size:10px;color:var(--bs-grey-1)"></span></div>
+    <div class="card" id="joint-income"></div>
+    <div class="row" style="margin:10px 0 6px"><span class="label" style="margin:0;font-size:9px">Other income</span></div>
+    <div class="card" id="joint-other-income"></div>
+    <button class="tiny-act" style="margin-top:6px" onclick="openJointItem(null,'income')">+ Add income</button>
+
+    <div class="row" style="margin:18px 0 6px"><span class="label" style="margin:0">Fixed</span><span class="mono" id="fix-total" style="font-size:10px;color:var(--bs-grey-1)"></span></div>
+    <div class="card" id="joint-fixed"></div>
+    <button class="tiny-act" style="margin-top:6px" onclick="openJointItem(null,'fixed')">+ Add fixed cost</button>
+
+    <div class="row" style="margin:14px 0 6px"><span class="label" style="margin:0;font-size:9px">Subscriptions</span><span class="mono" id="subs-total" style="font-size:10px;color:var(--bs-grey-1)"></span></div>
+    <div class="card" id="joint-subs"></div>
+    <button class="tiny-act" style="margin-top:6px" onclick="openJointItem(null,'subscription')">+ Add subscription</button>
+
+    <div class="row" style="margin:18px 0 6px"><span class="label" style="margin:0">Variable</span><span class="mono" id="var-total" style="font-size:10px;color:var(--bs-grey-1)"></span></div>
+    <div class="card" id="joint-variable"></div>
+    <button class="tiny-act" style="margin-top:6px" onclick="openJointItem(null,'variable')">+ Add variable cost</button>
+
+    <div class="row" style="margin:18px 0 6px"><span class="label" style="margin:0">Pots</span><span class="mono" id="pot-total" style="font-size:10px;color:var(--bs-grey-1)"></span></div>
+    <div class="card" id="joint-pot"></div>
+    <button class="tiny-act" style="margin-top:6px" onclick="openJointItem(null,'pot')">+ Add pot</button>
   </section>
 
   <!-- GOALS -->
   <section id="s-goals">
+    <div class="row" style="margin:0 0 6px"><span class="label" style="margin:0">Debts</span><button class="tiny-act" onclick="openLoan()">+ Add loan</button></div>
+    <div class="card" id="loan-list"></div>
+    <button class="btn ghost sm" style="width:100%;margin:8px 0 20px" onclick="openShot('loan')">Screenshot a loan statement</button>
+
     <div class="row" style="align-items:flex-start">
       <div><div class="sec-title">Goals</div><div class="sec-sub">Targets, and how to hit them.</div></div>
       <button class="btn sm" onclick="openGoal()" style="margin-top:6px">+ New</button>
@@ -302,15 +342,20 @@ nav{position:fixed;bottom:0;left:0;right:0;background:var(--bs-white);border-top
         <label class="field"><span class="label">Name 2</span><input type="text" id="set-n2" placeholder="Lola"></label>
         <label class="field"><span class="label">Net income £</span><input type="number" id="set-i2" placeholder="0"></label>
       </div>
-      <div class="sub">Combined net income drives the allocation buckets.</div>
+      <div class="sub">Combined net income drives the joint contribution split.</div>
     </div>
 
-    <div class="row" style="margin:18px 0 6px">
-      <span class="label" style="margin:0">Allocation buckets</span>
-      <span class="mono" id="buck-sum" style="font-size:10px;color:var(--bs-grey-1)"></span>
+    <div class="row" style="margin:18px 0 6px"><span class="label" style="margin:0">Joint account</span></div>
+    <div class="card row">
+      <div class="sub">Itemised costs, contribution split, and disposable income live in the Joint tab.</div>
+      <button class="btn ghost sm" onclick="go('joint')" style="white-space:nowrap">Open</button>
     </div>
-    <div class="card" id="buck-list"></div>
-    <button class="btn ghost sm" style="width:100%" onclick="addBucket()">+ Add bucket</button>
+
+    <div class="row" style="margin:14px 0 6px"><span class="label" style="margin:0">Accounts</span></div>
+    <div class="card row">
+      <div class="sub">Screenshot Monzo or add balances by hand.</div>
+      <button class="btn ghost sm" onclick="openAccountsSheet()" style="white-space:nowrap">Open</button>
+    </div>
 
     <button class="btn" style="margin-top:18px" onclick="saveSetup()">Save setup</button>
 
@@ -376,13 +421,13 @@ const store = {
   },
   async set(k,v){ await rawSet(k,v); schedulePush(); }   // user change → persist + sync
 };
-const K = {set:'bs_budget:settings',acc:'bs_budget:accounts',loan:'bs_budget:loans',goal:'bs_budget:goals',buck:'bs_budget:buckets',hist:'bs_budget:history',sync:'bs_budget:sync'};
+const K = {set:'bs_budget:settings',acc:'bs_budget:accounts',loan:'bs_budget:loans',goal:'bs_budget:goals',joint:'bs_budget:joint',hist:'bs_budget:history',sync:'bs_budget:sync'};
 
 /* ---- optional Supabase sync (config kept local to each device) ---- */
 let SB={url:'',anon:'',household:''}, lastSeen='', applying=false, pushT=null;
 function loadSync(){ try{ const s=JSON.parse(localStorage.getItem(K.sync)||'{}'); SB={url:s.url||'',anon:s.anon||'',household:s.household||''}; }catch(e){} }
 const sbOn=()=> !!(SB.url&&SB.anon&&SB.household);
-function snapshot(){ return {settings:S.settings,accounts:S.accounts,loans:S.loans,goals:S.goals,buckets:S.buckets,history:S.history}; }
+function snapshot(){ return {settings:S.settings,accounts:S.accounts,loans:S.loans,goals:S.goals,joint:S.joint,history:S.history}; }
 function schedulePush(){ if(!sbOn()||applying)return; clearTimeout(pushT); pushT=setTimeout(sbPush,800); }
 async function sbPush(){
   if(!sbOn())return;
@@ -407,9 +452,9 @@ async function sbPull(){
 async function applyRemote(d){
   if(!d)return; applying=true;
   S.settings=d.settings||S.settings; S.accounts=d.accounts||[]; S.loans=d.loans||[];
-  S.goals=d.goals||[]; S.buckets=d.buckets||S.buckets; S.history=d.history||[];
+  S.goals=d.goals||[]; S.joint=d.joint||S.joint; S.history=d.history||[];
   await Promise.all([rawSet(K.set,JSON.stringify(S.settings)),rawSet(K.acc,JSON.stringify(S.accounts)),rawSet(K.loan,JSON.stringify(S.loans)),
-    rawSet(K.goal,JSON.stringify(S.goals)),rawSet(K.buck,JSON.stringify(S.buckets)),rawSet(K.hist,JSON.stringify(S.history))]);
+    rawSet(K.goal,JSON.stringify(S.goals)),rawSet(K.joint,JSON.stringify(S.joint)),rawSet(K.hist,JSON.stringify(S.history))]);
   renderAll(); applying=false;
 }
 function setSyncStatus(t){ const e=document.getElementById('sync-status'); if(e)e.textContent=t; }
@@ -418,11 +463,57 @@ function startSync(){ if(!sbOn())return; setInterval(()=>{ if(document.visibilit
 
 /* ============ state ============ */
 let S = {
-  settings:{payday:28,people:[{name:'Berns',income:0},{name:'Lola',income:0}]},
-  accounts:[], loans:[], goals:[],
-  buckets:[
-    {name:'Essentials',pct:50},{name:'Giving',pct:10},{name:'Savings',pct:10},
-    {name:'Debt payoff',pct:10},{name:'Investments',pct:10},{name:'Play',pct:5},{name:'Buffer',pct:5}
+  settings:{payday:28,people:[{name:'Berns',income:2468.23},{name:'Lola',income:1000}],splitMode:'custom',splitPct:[1922.21,1246.05]},
+  accounts:[],
+  loans:[
+    {name:'Debt Consolidation Loan (Admiral)', balance:15587.07, apr:18.9, minPayment:362.49, start:22111.89},
+    {name:'Hire Purchase (Admiral)', balance:19010.25, apr:8.3, minPayment:372.75, start:22737.75},
+    {name:'Spending (Lloyds Credit Card)', balance:0, apr:0, minPayment:0, start:0},
+    {name:"Lola's Loan (ASDA)", balance:0, apr:0, minPayment:197.75, start:0},
+    {name:"Lola's Loan (Tesco)", balance:0, apr:0, minPayment:201.38, start:0}
+  ],
+  goals:[
+    {name:'Emergency Fund', type:'savings', target:1000, current:0, deadline:''}
+  ],
+  joint:[
+    // income
+    {name:"Lola's Mum", monthly:0, kind:'income', actual:1000, note:'One-off, not part of regular planning'},
+    {name:'AirBnb', monthly:0, kind:'income', actual:95, note:'One-off, not part of regular planning'},
+    // fixed
+    {name:'Mortgage / Rent', monthly:1234.94, kind:'fixed', actual:1234.94, note:'Nationwide'},
+    {name:'Home Insurance', monthly:24.39, kind:'fixed', actual:24.70, note:"Swift Cover / Berns' Lloyds"},
+    {name:'Council Tax', monthly:153.89, kind:'fixed', actual:429.00, note:'Medway Council — actual looks like a lump payment, worth checking'},
+    {name:'Gas & Electric', monthly:119.93, kind:'fixed', actual:119.93, note:'EDF'},
+    {name:'Water', monthly:73.10, kind:'fixed', actual:76.64, note:'Southern Water'},
+    {name:'Internet / Broadband', monthly:37.99, kind:'fixed', actual:37.99, note:''},
+    {name:'TV Licence', monthly:0, kind:'fixed', actual:0, note:'Quarterly, approx £44.87/quarter — Mar/Jun/Sep/Dec'},
+    {name:'Car Insurance', monthly:229.72, kind:'fixed', actual:229.72, note:''},
+    {name:'Car Finance', monthly:362.49, kind:'fixed', actual:362.49, note:'Separate from the Hire Purchase tracked in Goals'},
+    {name:'Childcare / School', monthly:0, kind:'fixed', actual:0, note:''},
+    {name:'Phone Bills', monthly:47.92, kind:'fixed', actual:51.19, note:''},
+    // subscriptions — itemized, add/remove freely, total accumulates automatically
+    {name:'YouTube Premium', monthly:12.99, kind:'subscription', actual:0, note:''},
+    {name:'Apple TV', monthly:0, kind:'subscription', actual:0, note:''},
+    {name:'PlayStation Online', monthly:6.99, kind:'subscription', actual:0, note:''},
+    {name:'Google One', monthly:2.49, kind:'subscription', actual:0, note:''},
+    {name:'Amazon Prime', monthly:8.99, kind:'subscription', actual:0, note:''},
+    {name:'Monzo Perks Plan', monthly:22.00, kind:'subscription', actual:0, note:''},
+    {name:'The Athletic', monthly:2.99, kind:'subscription', actual:0, note:''},
+    {name:'Ring Doorbell', monthly:7.99, kind:'subscription', actual:0, note:'Smart doorbell'},
+    // variable
+    {name:'Groceries', monthly:240, kind:'variable', actual:240, note:''},
+    {name:'Household Supplies', monthly:0, kind:'variable', actual:0, note:''},
+    {name:'Fuel', monthly:0, kind:'variable', actual:0, note:''},
+    {name:'Public Transport', monthly:1132, kind:'variable', actual:1140, note:'These figures match the Net Cash Flow cell elsewhere — likely a formula error in the original sheet, worth checking'},
+    {name:"Kids' Activities", monthly:0, kind:'variable', actual:0, note:''},
+    {name:'NHS / Prescriptions', monthly:0, kind:'variable', actual:0, note:''},
+    {name:'Dental / Optician', monthly:0, kind:'variable', actual:0, note:''},
+    {name:'Eating Out', monthly:0, kind:'variable', actual:0, note:''},
+    {name:'Family Activities', monthly:0, kind:'variable', actual:0, note:''},
+    // pots
+    {name:'Car Tax / MOT (set aside)', monthly:0, kind:'pot', actual:0, note:'Next payment £102.38 due 01/08/2026'},
+    {name:'Emergency Fund Contribution', monthly:0, kind:'pot', actual:0, note:''},
+    {name:'Other Savings', monthly:0, kind:'pot', actual:0, note:''}
   ],
   history:[]
 };
@@ -432,20 +523,20 @@ let recommended = null;
 
 async function loadAll(){
   const [a,b,c,d,e,f] = await Promise.all([
-    store.get(K.set),store.get(K.acc),store.get(K.loan),store.get(K.goal),store.get(K.buck),store.get(K.hist)
+    store.get(K.set),store.get(K.acc),store.get(K.loan),store.get(K.goal),store.get(K.joint),store.get(K.hist)
   ]);
   if(a) try{S.settings=JSON.parse(a)}catch(_){}
   if(b) try{S.accounts=JSON.parse(b)}catch(_){}
   if(c) try{S.loans=JSON.parse(c)}catch(_){}
   if(d) try{S.goals=JSON.parse(d)}catch(_){}
-  if(e) try{S.buckets=JSON.parse(e)}catch(_){}
+  if(e) try{S.joint=JSON.parse(e)}catch(_){}
   if(f) try{S.history=JSON.parse(f)}catch(_){}
 }
 const saveSettings=()=>store.set(K.set,JSON.stringify(S.settings));
 const saveAcc=()=>store.set(K.acc,JSON.stringify(S.accounts));
 const saveLoan=()=>store.set(K.loan,JSON.stringify(S.loans));
 const saveGoal=()=>store.set(K.goal,JSON.stringify(S.goals));
-const saveBuck=()=>store.set(K.buck,JSON.stringify(S.buckets));
+const saveJoint=()=>store.set(K.joint,JSON.stringify(S.joint));
 const saveHist=()=>store.set(K.hist,JSON.stringify(S.history));
 
 /* ============ helpers ============ */
@@ -456,7 +547,7 @@ function fmt2(n){return (n<0?'-£':'£')+Math.abs(n).toLocaleString('en-GB',{min
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),1900)}
 function escapeHtml(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 
-function combinedIncome(){return (S.settings.people[0]?.income||0)+(S.settings.people[1]?.income||0)}
+function combinedIncome(){return (S.settings.people[0]?.income||0)+(S.settings.people[1]?.income||0)+S.joint.filter(x=>x.kind==='income').reduce((t,x)=>t+(x.monthly||0),0)}
 function netWorth(){
   const aSum=S.accounts.reduce((t,a)=>t+(a.balance||0),0);
   const lSum=S.loans.reduce((t,l)=>t+(l.balance||0),0);
@@ -476,7 +567,7 @@ function daysInfo(){
 /* ============ nav ============ */
 const TABS=[
   ['overview','Home','M3 11 12 4l9 7M5 10v9h14v-9'],
-  ['balances','Balances','M3 7h18v12H3zM3 7l3-3h12l3 3M8 13h4'],
+  ['joint','Joint','M13 12a4 4 0 11-8 0 4 4 0 018 0zM19 12a4 4 0 11-8 0 4 4 0 018 0z'],
   ['goals','Goals','M12 3v18M5 6l7 3 7-3v9l-7 3-7-3z'],
   ['spending','Spend','M4 19V5M4 19h16M8 16v-5M12 16V8M16 16v-8'],
   ['setup','Setup','M12 8a4 4 0 100 8 4 4 0 000-8zM12 2v3M12 19v3M2 12h3M19 12h3']
@@ -505,29 +596,11 @@ function buildWho(){
 
 /* ============ overview ============ */
 function renderOverview(){
-  const nw=netWorth();
-  $('#ov-net').textContent=fmt(nw);
-  $('#ov-net').className='figure'+(nw<0?' neg':'');
-  const aSum=S.accounts.reduce((t,a)=>t+(a.balance||0),0);
-  const lSum=S.loans.reduce((t,l)=>t+(l.balance||0),0);
-  $('#ov-net-sub').textContent=`${fmt(aSum)} in accounts · ${fmt(lSum)} owed`;
-
-  if(csv){$('#ov-in').textContent=fmt(csv.totalIn);$('#ov-out').textContent=fmt(csv.totalOut);}
-  else{$('#ov-in').textContent='—';$('#ov-out').textContent='—';}
-
-  const g=$('#ov-goals');g.innerHTML='';
-  if(!S.goals.length){g.innerHTML='<div class="sub">No goals yet.</div>';}
-  S.goals.slice(0,2).forEach(gl=>{
-    const {pct}=goalProgress(gl);
-    g.appendChild(barRow(gl.name,pct,gl.type==='debt'?`${fmt(gl.current)} left`:`${fmt(gl.current)}/${fmt(gl.target)}`,gl.type==='debt'));
-  });
-
-  const c=$('#ov-cats');c.innerHTML='';
-  if(csv){
-    const top=[...csv.byCat].sort((a,b)=>b.v-a.v).slice(0,4);
-    const max=top[0]?.v||1;
-    top.forEach(t=>c.appendChild(barRow(t.k,Math.round(t.v/max*100),fmt(t.v))));
-  } else c.innerHTML='<div class="sub">Load a CSV in Spend.</div>';
+  const inc=combinedIncome(), exp=jointTotal(), net=inc-exp;
+  $('#ov-net').textContent=fmt(net);
+  $('#ov-net').className='figure'+(net<0?' neg':'');
+  $('#ov-in').textContent=fmt(inc);
+  $('#ov-out').textContent=fmt(exp);
 }
 function barRow(name,pct,val,over){
   const r=el('div','bar-row');
@@ -536,29 +609,39 @@ function barRow(name,pct,val,over){
   return r;
 }
 
-/* ============ balances ============ */
-function renderBalances(){
-  const al=$('#acc-list');al.innerHTML='';
-  if(!S.accounts.length) al.innerHTML='<div class="empty">No accounts yet. Screenshot Monzo or add one.</div>';
-  S.accounts.forEach((a,i)=>{
-    const r=el('div','line');
-    r.innerHTML=`<div><div class="l-name">${escapeHtml(a.name)}</div><div class="l-meta mono">${(a.type||'current')}</div></div>
-    <div style="display:flex;align-items:center;gap:12px"><span class="l-val">${fmt(a.balance)}</span><span class="del" data-i="${i}">Del</span></div>`;
-    r.querySelector('.del').onclick=()=>{S.accounts.splice(i,1);saveAcc();renderBalances();renderOverview();};
-    r.querySelector('.l-name').onclick=()=>openAccount(i);
-    al.appendChild(r);
-  });
-
-  const ll=$('#loan-list');ll.innerHTML='';
+/* ============ accounts & loans ============ */
+function renderLoans(){
+  const ll=$('#loan-list');if(!ll)return;ll.innerHTML='';
   if(!S.loans.length) ll.innerHTML='<div class="empty">No loans tracked.</div>';
   S.loans.forEach((l,i)=>{
     const r=el('div','line');
     const meta=[l.apr?`${l.apr}% APR`:null,l.minPayment?`min ${fmt(l.minPayment)}`:null].filter(Boolean).join(' · ');
     r.innerHTML=`<div><div class="l-name">${escapeHtml(l.name)}</div><div class="l-meta mono">${meta||'loan'}</div></div>
     <div style="display:flex;align-items:center;gap:12px"><span class="l-val">${fmt(l.balance)}</span><span class="del" data-i="${i}">Del</span></div>`;
-    r.querySelector('.del').onclick=()=>{S.loans.splice(i,1);saveLoan();renderBalances();renderOverview();};
+    r.querySelector('.del').onclick=()=>{S.loans.splice(i,1);saveLoan();renderLoans();renderOverview();};
     r.querySelector('.l-name').onclick=()=>openLoan(i);
     ll.appendChild(r);
+  });
+}
+function openAccountsSheet(){
+  openSheet(sheetHead('Accounts','Screenshot Monzo, or add by hand.')+`
+    <div class="btn-stack" style="margin-bottom:16px">
+      <button class="btn" onclick="openShot('account')">Screenshot balances</button>
+      <button class="btn ghost sm" style="width:100%" onclick="openAccount()">Add manually</button>
+    </div>
+    <div class="card" id="acc-list"></div>`);
+  renderAccList();
+}
+function renderAccList(){
+  const al=$('#acc-list');if(!al)return;al.innerHTML='';
+  if(!S.accounts.length) al.innerHTML='<div class="empty">No accounts yet.</div>';
+  S.accounts.forEach((a,i)=>{
+    const r=el('div','line');
+    r.innerHTML=`<div><div class="l-name">${escapeHtml(a.name)}</div><div class="l-meta mono">${(a.type||'current')}</div></div>
+    <div style="display:flex;align-items:center;gap:12px"><span class="l-val">${fmt(a.balance)}</span><span class="del" data-i="${i}">Del</span></div>`;
+    r.querySelector('.del').onclick=()=>{S.accounts.splice(i,1);saveAcc();renderAccList();renderOverview();};
+    r.querySelector('.l-name').onclick=()=>openAccount(i);
+    al.appendChild(r);
   });
 }
 
@@ -755,7 +838,7 @@ function renderSpending(){
   const inc=combinedIncome();
   bud.appendChild(el('div','line',`<div class="l-name" style="font-weight:700">Total budget</div><span class="l-val">${fmt(recommended.totalRec)}</span>`));
   if(inc>0){const left=inc-recommended.totalRec;
-    bud.appendChild(el('div','note',`Against ${fmt(inc)} combined income, that leaves <b class="${left<0?'flag':'pos'}">${fmt(left)}</b> for savings, debt and buckets.`));
+    bud.appendChild(el('div','note',`Against ${fmt(inc)} combined income, that leaves <b class="${left<0?'flag':'pos'}">${fmt(left)}</b> for savings, debt and goals.`));
   }
 }
 function handleCsvText(text){
@@ -771,44 +854,154 @@ function saveMonth(){
   saveHist();toast('Saved to history');
 }
 
-/* ============ buckets / allocation ============ */
-function renderBuckets(){
-  const c=$('#buck-list');c.innerHTML='';
-  const inc=combinedIncome();let sum=0;
-  S.buckets.forEach((b,i)=>{
-    sum+=b.pct||0;
-    const amt=inc*(b.pct||0)/100;
-    const row=el('div','line');
-    row.innerHTML=`<div style="flex:1"><div class="l-name">${escapeHtml(b.name)}</div>
-      <div class="l-meta">${inc>0?fmt(amt)+' / mo':''}</div></div>
-      <div style="display:flex;align-items:center;gap:8px">
-      <input type="number" value="${b.pct}" data-bi="${i}" style="width:64px;text-align:right;padding:7px 9px"> <span class="mono" style="font-size:11px">%</span>
-      <span class="del" data-del="${i}">×</span></div>`;
-    row.querySelector('input').oninput=e=>{S.buckets[i].pct=parseFloat(e.target.value)||0;updateBuckSum();};
-    row.querySelector('[data-del]').onclick=()=>{S.buckets.splice(i,1);renderBuckets();};
+/* ============ joint contribution ============ */
+function jointTotal(){ return S.joint.filter(x=>x.kind!=='income').reduce((t,x)=>t+(x.monthly||0),0); }
+function splitShares(){
+  const mode=S.settings.splitMode||'income';
+  if(mode==='equal') return [0.5,0.5];
+  if(mode==='custom'){
+    const p=S.settings.splitPct||[50,50];
+    const sum=(p[0]||0)+(p[1]||0);
+    return sum>0 ? [p[0]/sum,p[1]/sum] : [0.5,0.5];
+  }
+  const inc=combinedIncome();
+  if(inc<=0) return [0.5,0.5];
+  const i0=S.settings.people[0]?.income||0, i1=S.settings.people[1]?.income||0;
+  return [i0/inc, i1/inc];
+}
+function jointFor(i){ return jointTotal()*splitShares()[i]; }
+function disposableFor(i){ return (S.settings.people[i]?.income||0) - jointFor(i); }
+
+/* trim suggestion: only discretionary variable spending gets a recommended cut.
+   debt, giving/charity, named support payments and fixed commitments are left alone. */
+/* suggested budget: reconcile planned monthly against real actual spend.
+   discretionary categories get nudged down; everything else gets nudged to match reality
+   (so fixed costs that consistently run higher than planned aren't quietly under-budgeted). */
+const DISC_KEYWORDS=['dining','hair','beauty','driving','misc','entertainment','shopping','personal care','subscription','takeaway','leisure','eating out','family activities','fuel'];
+function isDiscretionary(name,kind){
+  if(kind==='fixed'||kind==='income'||kind==='subscription') return false;
+  const n=(name||'').toLowerCase();
+  return DISC_KEYWORDS.some(k=>n.includes(k));
+}
+function suggestedFor(x){
+  if(x.kind==='income') return x.monthly;
+  const basis = x.actual>0 ? x.actual : x.monthly;
+  return isDiscretionary(x.name,x.kind) ? Math.round(basis*0.88) : Math.round(basis);
+}
+function kindTotal(kind){ return S.joint.filter(x=>x.kind===kind).reduce((t,x)=>t+(x.monthly||0),0); }
+function kindSuggestedTotal(kind){ return S.joint.filter(x=>x.kind===kind).reduce((t,x)=>t+suggestedFor(x),0); }
+function allSuggestedTotal(){ return ['fixed','variable','pot','subscription'].reduce((t,k)=>t+kindSuggestedTotal(k),0); }
+
+function renderSplitSeg(){
+  const seg=$('#split-seg'); if(!seg)return;
+  seg.innerHTML='';
+  [['income','By income'],['equal','Equal split'],['custom','Custom']].forEach(([m,lbl])=>{
+    const b=el('button',m===(S.settings.splitMode||'income')?'on':'',lbl);
+    b.onclick=()=>{S.settings.splitMode=m;saveSettings();renderSplitSeg();renderJoint();};
+    seg.appendChild(b);
+  });
+  const cw=$('#split-custom');
+  if(cw){
+    cw.style.display = S.settings.splitMode==='custom' ? 'block':'none';
+    const p=S.settings.splitPct||[50,50];
+    $('#sc-l1').textContent=(S.settings.people[0]?.name||'P1')+' %';
+    $('#sc-l2').textContent=(S.settings.people[1]?.name||'P2')+' %';
+    $('#sc-1').value=p[0]; $('#sc-2').value=p[1];
+    $('#sc-1').oninput=e=>{S.settings.splitPct=[parseFloat(e.target.value)||0,S.settings.splitPct?.[1]||0];saveSettings();renderJointTotals();};
+    $('#sc-2').oninput=e=>{S.settings.splitPct=[S.settings.splitPct?.[0]||0,parseFloat(e.target.value)||0];saveSettings();renderJointTotals();};
+  }
+}
+function jointRow(name,valueGetter,valueSetter,suggested,onDel,onRename,note,actual){
+  const r=el('div','line');
+  const v=valueGetter();
+  let metaHtml='';
+  if(suggested!=null && suggested!==v){
+    const lower=suggested<v;
+    metaHtml+=`<div class="l-meta mono" style="color:${lower?'var(--bs-blue)':'var(--neg)'}">${lower?'suggest':'actual runs'} ${fmt(suggested)}</div>`;
+  }
+  if(note) metaHtml+=`<div class="l-meta">${escapeHtml(note)}</div>`;
+  r.innerHTML=`<div style="flex:1"><div class="l-name">${escapeHtml(name)}</div>${metaHtml}</div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <span class="mono" style="font-size:13px;color:var(--bs-grey-1)">£</span>
+    <input type="number" value="${v}" style="width:84px;text-align:right;padding:7px 8px;font-weight:700">
+    ${onDel?`<span class="del">Del</span>`:''}
+  </div>`;
+  const input=r.querySelector('input');
+  input.oninput=e=>{ valueSetter(parseFloat(e.target.value)||0); renderJointTotals(); };
+  if(onRename) r.querySelector('.l-name').onclick=onRename;
+  if(onDel) r.querySelector('.del').onclick=onDel;
+  return r;
+}
+function jointGroupList(id,kind){
+  const c=$('#'+id); if(!c)return; c.innerHTML='';
+  const items=S.joint.map((x,i)=>({...x,i})).filter(x=>x.kind===kind);
+  if(!items.length){c.innerHTML=`<div class="empty">Nothing here yet.</div>`;return;}
+  items.forEach(x=>{
+    const sug = kind==='income' ? null : suggestedFor(x);
+    const row=jointRow(x.name,
+      ()=>S.joint[x.i].monthly,
+      v=>{ S.joint[x.i].monthly=v; saveJoint(); },
+      sug,
+      ()=>{S.joint.splice(x.i,1);saveJoint();renderJoint();renderOverview();},
+      ()=>openJointItem(x.i),
+      x.note
+    );
     c.appendChild(row);
   });
-  updateBuckSum();
 }
-function updateBuckSum(){
-  const sum=S.buckets.reduce((t,b)=>t+(b.pct||0),0);
-  const e=$('#buck-sum');e.textContent='Total '+sum+'%';
-  e.style.color=sum===100?'var(--bs-blue)':'var(--neg)';
+function renderIncomeList(){
+  const c=$('#joint-income'); if(!c)return; c.innerHTML='';
+  S.settings.people.forEach((p,i)=>{
+    const row=jointRow(p.name||('Person '+(i+1)),
+      ()=>S.settings.people[i].income,
+      v=>{ S.settings.people[i].income=v; saveSettings(); },
+      null,
+      null,
+      ()=>{ const v=prompt('Name',p.name); if(v!=null){S.settings.people[i].name=v.trim()||p.name;saveSettings();buildWho();renderIncomeList();} }
+    );
+    c.appendChild(row);
+  });
+  jointGroupList('joint-other-income','income');
 }
-function addBucket(){S.buckets.push({name:'New bucket',pct:0});renderBuckets();
-  const inputs=$('#buck-list').querySelectorAll('.l-name');const last=inputs[inputs.length-1];
-  // turn name into editable on tap
-}
-// make bucket names editable
-$('#buck-list')?.addEventListener('click',e=>{
-  if(e.target.classList.contains('l-name')){
-    const i=[...$('#buck-list').children].indexOf(e.target.closest('.line'));
-    const cur=S.buckets[i].name;const v=prompt('Bucket name',cur);
-    if(v!=null){S.buckets[i].name=v;renderBuckets();}
+function renderJointTotals(){
+  const total=jointTotal(), inc=combinedIncome();
+  const p=S.settings.people, shares=splitShares();
+  const sum=$('#joint-summary');
+  if(sum){
+    sum.innerHTML=`<span class="label" style="color:#9aa0a6">Required this month</span>
+    <div class="figure" style="margin-top:4px">${fmt(total)}</div>
+    <div class="divider" style="border-color:#333"></div>
+    ${p.map((person,i)=>`
+      <div class="kpi-line"><span class="k" style="color:#9aa0a6">${escapeHtml(person.name||('P'+(i+1)))} pays in</span><span class="v">${fmt(jointFor(i))} <span style="color:#666;font-weight:500">(${Math.round(shares[i]*100)}%)</span></span></div>
+      <div class="kpi-line"><span class="k" style="color:#9aa0a6">${escapeHtml(person.name||('P'+(i+1)))} disposable</span><span class="v ${disposableFor(i)<0?'neg':''}">${fmt(disposableFor(i))}</span></div>
+    `).join('')}
+    <div class="divider" style="border-color:#333"></div>
+    <div class="kpi-line"><span class="k" style="color:#9aa0a6">Combined disposable</span><span class="v" style="font-size:17px">${fmt(inc-total)}</span></div>`;
   }
-});
+  const incT=$('#inc-total'); if(incT) incT.textContent='Total '+fmt(inc);
+  const fixT=$('#fix-total'); if(fixT) fixT.textContent='Total '+fmt(kindTotal('fixed'));
+  const subsT=$('#subs-total'); if(subsT) subsT.textContent='Total '+fmt(kindTotal('subscription'));
+  const varT=$('#var-total'); if(varT) varT.textContent='Total '+fmt(kindTotal('variable'));
+  const potT=$('#pot-total'); if(potT) potT.textContent='Total '+fmt(kindTotal('pot'));
 
-/* ============ sheets / modals ============ */
+  const sugCard=$('#suggested-summary');
+  if(sugCard){
+    const now=jointTotal(), sug=allSuggestedTotal(), diff=now-sug;
+    sugCard.innerHTML=`<div class="row"><span class="label" style="margin:0">Suggested budget</span><span class="mono" style="font-size:10px;color:var(--bs-grey-1)">vs ${fmt(now)} now</span></div>
+    <div class="figure sm blue" style="margin-top:8px">${fmt(sug)}</div>
+    <div class="sub" style="margin-top:4px">${diff>1?`Trims discretionary spend and matches the rest to what you actually pay — frees up <b style="color:var(--bs-black)">${fmt(diff)}</b>/month.`:diff<-1?`Some fixed and essential costs are running higher than budgeted — this adds <b style="color:var(--bs-black)">${fmt(-diff)}</b>/month to be realistic.`:`Your current budget already matches reality closely.`}</div>`;
+  }
+  renderOverview();
+}
+function renderJoint(){
+  renderSplitSeg();
+  renderIncomeList();
+  jointGroupList('joint-fixed','fixed');
+  jointGroupList('joint-subs','subscription');
+  jointGroupList('joint-variable','variable');
+  jointGroupList('joint-pot','pot');
+  renderJointTotals();
+}
 function openSheet(html){$('#sheet').innerHTML=html;$('#scrim').classList.add('on');}
 function closeSheet(){$('#scrim').classList.remove('on'); const w=document.getElementById('wiz'); if(w&&w.classList.contains('on')&&typeof renderWiz==='function')renderWiz();}
 $('#scrim').addEventListener('click',e=>{if(e.target.id==='scrim')closeSheet();});
@@ -830,7 +1023,7 @@ function openAccount(i){
 function saveAccount(i){
   const o={name:$('#a-name').value.trim()||'Account',balance:parseFloat($('#a-bal').value)||0,type:$('#a-type').value};
   if(i>=0)S.accounts[i]=o;else S.accounts.push(o);
-  saveAcc();renderBalances();renderOverview();closeSheet();
+  saveAcc();renderAccList();renderOverview();closeSheet();
 }
 function openLoan(i){
   const l=i!=null?S.loans[i]:{name:'',balance:'',apr:'',minPayment:''};
@@ -846,7 +1039,7 @@ function openLoan(i){
 function saveLoanItem(i){
   const o={name:$('#l-name').value.trim()||'Loan',balance:parseFloat($('#l-bal').value)||0,apr:parseFloat($('#l-apr').value)||0,minPayment:parseFloat($('#l-min').value)||0};
   if(i>=0){o.start=S.loans[i].start||o.balance;S.loans[i]=o;}else{o.start=o.balance;S.loans.push(o);}
-  saveLoan();renderBalances();renderOverview();closeSheet();
+  saveLoan();renderLoans();renderOverview();closeSheet();
 }
 function openGoal(i){
   const g=i!=null?S.goals[i]:{name:'',type:'savings',target:'',current:'',deadline:'',loanIdx:-1,apr:''};
@@ -864,7 +1057,7 @@ function openGoal(i){
       </div>
     </div>
     <div id="g-debt" style="display:${g.type==='debt'?'block':'none'}">
-      <label class="field"><span class="label">Link a loan ${S.loans.length?'':'(none yet — add one in Balances)'}</span>
+      <label class="field"><span class="label">Link a loan ${S.loans.length?'':'(none yet — add one in Goals)'}</span>
         <select id="g-loan">${loanOpts||'<option value="-1">No loan linked</option>'}</select></label>
     </div>
     <label class="field"><span class="label">Target date</span><input id="g-date" type="date" value="${g.deadline||''}"></label>
@@ -890,6 +1083,33 @@ function saveGoalItem(i){
   }
   if(i>=0)S.goals[i]=o;else S.goals.push(o);
   saveGoal();renderGoals();renderOverview();closeSheet();
+}
+
+function openJointItem(i,presetKind){
+  const x=i!=null?S.joint[i]:{name:'',monthly:'',kind:presetKind||'fixed',actual:'',note:''};
+  const KLABEL={fixed:'Fixed cost',variable:'Variable cost',pot:'Pot',income:'Income',subscription:'Subscription'};
+  const SEGLABEL={fixed:'Fixed',variable:'Variable',pot:'Pot',income:'Income',subscription:'Subs'};
+  openSheet(sheetHead(i!=null?'Edit item':'New '+(presetKind?KLABEL[presetKind].toLowerCase():'joint item'),'Anything that comes in or out of the joint account each month.')+`
+    <div class="seg" id="j-seg" style="${presetKind&&i==null?'display:none':''}">
+      ${['fixed','variable','pot','income','subscription'].map(k=>`<button data-k="${k}" style="padding:8px 2px;font-size:9px" class="${x.kind===k?'on':''}">${SEGLABEL[k]}</button>`).join('')}
+    </div>
+    <label class="field"><span class="label">Name</span><input id="j-name" type="text" value="${escapeHtml(x.name)}" placeholder="Housing, groceries, Lola's car…"></label>
+    <div class="inline2">
+      <label class="field"><span class="label">Monthly £ (planned)</span><input id="j-monthly" type="number" value="${x.monthly}"></label>
+      <label class="field"><span class="label">Actual £ (optional)</span><input id="j-actual" type="number" value="${x.actual||''}"></label>
+    </div>
+    <label class="field"><span class="label">Note (optional)</span><input id="j-note" type="text" value="${escapeHtml(x.note||'')}" placeholder="Lender, due date, anything worth remembering"></label>
+    <button class="btn" onclick="saveJointItem(${i!=null?i:-1})">Save</button>`);
+  $('#j-seg').querySelectorAll('button').forEach(b=>b.onclick=()=>{ $('#j-seg').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b)); });
+  window.__getJKind=()=> presetKind && i==null ? presetKind : ($('#j-seg').querySelector('button.on')?.dataset.k||'fixed');
+  setTimeout(()=>$('#j-name')?.focus(),50);
+}
+function saveJointItem(i){
+  const o={name:$('#j-name').value.trim()||'Item',monthly:parseFloat($('#j-monthly').value)||0,
+    kind:window.__getJKind?window.__getJKind():'fixed',actual:parseFloat($('#j-actual').value)||0,
+    note:$('#j-note').value.trim()};
+  if(i>=0)S.joint[i]=o;else S.joint.push(o);
+  saveJoint();renderJoint();renderOverview();closeSheet();
 }
 
 /* ============ screenshot import (AI vision) ============ */
@@ -952,9 +1172,9 @@ async function runShot(){
     saveAcc();saveLoan();
     $('#shot-result').innerHTML=`<div class="note">Added <b>${added}</b> ${shotMode==='loan'?'loan(s)':'account(s)'}. Check and edit anything that looks off.</div>`;
     btn.style.display='none';shotImages=[];
-    renderBalances();renderOverview();toast('Balances added');
+    renderAccList();renderLoans();renderOverview();toast('Balances added');
     if(document.getElementById('wiz')?.classList.contains('on')&&typeof renderWiz==='function')renderWiz();
-    setTimeout(closeSheet,1400);
+    setTimeout(()=>{ shotMode==='loan' ? closeSheet() : openAccountsSheet(); },1400);
   }catch(e){
     btn.disabled=false;tx.textContent='Read screenshots';
     $('#shot-result').innerHTML=`<div class="note"><span class="flag">Could not read that.</span> ${HAS_SHARED?'Try a clearer crop, or add it manually.':'AI reading only works inside Claude. Add it manually here.'}</div>`;
@@ -990,7 +1210,6 @@ function fillSetup(){
   $('#set-i1').value=S.settings.people[0]?.income||'';
   $('#set-n2').value=S.settings.people[1]?.name||'';
   $('#set-i2').value=S.settings.people[1]?.income||'';
-  renderBuckets();
 }
 function saveSetup(){
   S.settings.payday=parseInt($('#set-payday').value)||28;
@@ -998,8 +1217,8 @@ function saveSetup(){
     {name:$('#set-n1').value.trim()||'Berns',income:parseFloat($('#set-i1').value)||0},
     {name:$('#set-n2').value.trim()||'Lola',income:parseFloat($('#set-i2').value)||0}
   ];
-  saveSettings();saveBuck();
-  buildWho();renderOverview();renderSpending();
+  saveSettings();
+  buildWho();renderOverview();renderJoint();renderSpending();
   toast('Setup saved');
 }
 
@@ -1014,8 +1233,20 @@ function wireCsv(){
 }
 
 /* ============ init ============ */
-function renderAll(){ buildWho();renderOverview();renderBalances();renderGoals();renderSpending();fillSetup(); }
-(async function init(){
+function renderAll(){ buildWho();renderOverview();renderLoans();renderJoint();renderGoals();renderSpending();fillSetup(); }
+
+/* ---- passcode gate: only enforced on the live domain, never inside Claude ---- */
+const GATE_HASH='6e04efee3c6eca4b5950ce409879efc03b805ed83a4e17757e0215b5f3edbf6b';
+async function sha256(s){ const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)); return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join(''); }
+async function tryGate(){
+  const v=document.getElementById('gate-input').value.trim();
+  const h=await sha256(v);
+  if(h===GATE_HASH){ localStorage.setItem('bs_budget:unlocked','1'); document.getElementById('gate').classList.remove('on'); boot(); }
+  else { document.getElementById('gate-err').style.display='block'; document.getElementById('gate-input').value=''; document.getElementById('gate-input').focus(); }
+}
+function gateNeeded(){ return !HAS_SHARED && location.protocol.startsWith('http'); }
+
+async function boot(){
   buildNav();
   loadSync();
   await loadAll();
@@ -1024,7 +1255,7 @@ function renderAll(){ buildWho();renderOverview();renderBalances();renderGoals()
   wireCsv();
   startSync();
   if(typeof maybeOnboard==='function') maybeOnboard();
-})();
+}
 </script>
 
 <script>
@@ -1052,8 +1283,8 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
 }
 
 /* ============ SETUP GUIDE (step by step) ============ */
-const WIZ={step:0,order:['welcome','payday','people','accounts','loans','buckets','goals','csv','done']};
-function maybeOnboard(){ if(!S.settings.onboarded) startWizard(); fillSync(); }
+const WIZ={step:0,order:['welcome','payday','people','accounts','loans','joint','goals','csv','done']};
+function maybeOnboard(){ fillSync(); }
 function startWizard(){ WIZ.step=0; document.getElementById('wiz').classList.add('on'); renderWiz(); }
 function closeWizard(){ document.getElementById('wiz').classList.remove('on'); }
 function wizBack(){ if(WIZ.step>0){ WIZ.step--; renderWiz(); } }
@@ -1080,7 +1311,7 @@ function renderWiz(){
     <div class="kpi-line"><span class="k">2 · People</span><span class="v">you + ${escapeHtml(S.settings.people[1]?.name||'Lola')}</span></div>
     <div class="kpi-line"><span class="k">3 · Balances</span><span class="v">screenshot Monzo</span></div>
     <div class="kpi-line"><span class="k">4 · Debt</span><span class="v">what you owe</span></div>
-    <div class="kpi-line"><span class="k">5 · Buckets</span><span class="v">where income goes</span></div>
+    <div class="kpi-line"><span class="k">5 · Joint</span><span class="v">what goes to the joint account</span></div>
     <div class="kpi-line"><span class="k">6 · Goals</span><span class="v">targets + a plan</span></div>
     <div class="kpi-line"><span class="k">7 · Spending</span><span class="v">your first CSV</span></div></div>`;
   }
@@ -1092,7 +1323,7 @@ function renderWiz(){
   else if(step==='people'){
     const p=S.settings.people;
     h=`<div class="wiz-step-eyebrow">${eyebrow} · People</div><h2>Who's on this budget?</h2>
-    <p class="lede">Both take-home figures. Combined, they drive your allocation buckets.</p>
+    <p class="lede">Both take-home figures. Combined, they drive your joint contribution split.</p>
     <div class="inline2"><label class="field"><span class="label">Name 1</span><input type="text" id="w-n1" value="${escapeHtml(p[0]?.name||'Berns')}"></label>
     <label class="field"><span class="label">Net income £</span><input type="number" id="w-i1" value="${p[0]?.income||''}"></label></div>
     <div class="inline2"><label class="field"><span class="label">Name 2</span><input type="text" id="w-n2" value="${escapeHtml(p[1]?.name||'Lola')}"></label>
@@ -1112,12 +1343,12 @@ function renderWiz(){
     <div class="wiz-mini"><button class="btn ghost sm" style="flex:1" onclick="openShot('loan')">Screenshot a statement</button></div>
     <div class="card wiz-list" style="margin-top:14px" id="w-loan"></div>`;
   }
-  else if(step==='buckets'){
-    h=`<div class="wiz-step-eyebrow">${eyebrow} · Buckets</div><h2>How should income split?</h2>
-    <p class="lede">Your allocation across categories. Tweak the percentages — aim for 100%. Edit names by tapping them.</p>
-    <div class="row" style="margin-bottom:8px"><span class="label" style="margin:0">Buckets</span><span class="mono" id="w-buck-sum" style="font-size:10px"></span></div>
-    <div class="card" id="w-buck"></div>
-    <button class="btn ghost sm" style="width:100%" onclick="S.buckets.push({name:'New bucket',pct:0});renderWizBuckets();">+ Add bucket</button>`;
+  else if(step==='joint'){
+    h=`<div class="wiz-step-eyebrow">${eyebrow} · Joint</div><h2>What comes out of the joint account?</h2>
+    <p class="lede">Housing, bills, groceries, anything shared. Add what you've got — you can keep adding later from the Joint tab.</p>
+    <button class="btn" onclick="openJointItem()">Add a joint cost</button>
+    <div class="card wiz-list" style="margin-top:14px" id="w-joint"></div>
+    <div class="note" id="w-joint-summary" style="margin-top:12px"></div>`;
   }
   else if(step==='goals'){
     h=`<div class="wiz-step-eyebrow">${eyebrow} · Goals</div><h2>Set a goal or two.</h2>
@@ -1150,7 +1381,11 @@ function renderWiz(){
   if(step==='accounts')renderWizList('w-acc',S.accounts,a=>`${escapeHtml(a.name)} · ${fmt(a.balance)}`,'No accounts yet — optional.');
   if(step==='loans')renderWizList('w-loan',S.loans,l=>`${escapeHtml(l.name)} · ${fmt(l.balance)}`,'No debt added — optional.');
   if(step==='goals')renderWizList('w-goal',S.goals,g=>`${escapeHtml(g.name)} · ${g.type==='debt'?'debt':'save'}`,'No goals yet — optional.');
-  if(step==='buckets')renderWizBuckets();
+  if(step==='joint'){
+    renderWizList('w-joint',S.joint,x=>`${escapeHtml(x.name)} · ${fmt(x.monthly)}`,'No joint costs yet — optional.');
+    const t=jointTotal(); const sEl=document.getElementById('w-joint-summary');
+    if(sEl) sEl.textContent = t>0 ? `Joint total so far: ${fmt(t)}/mo. Split and per-person disposable are in the Joint tab.` : 'Add a few costs, or skip and fill these in from the Joint tab.';
+  }
   if(step==='csv'){
     const d=document.getElementById('w-csv-drop'),inp=document.getElementById('w-csv-input');
     d.onclick=()=>inp.click();
@@ -1163,20 +1398,6 @@ function renderWizList(id,arr,label,empty){
   if(!arr.length){c.innerHTML=`<div class="sub">${empty}</div>`;return;}
   arr.forEach(x=>{const r=document.createElement('div');r.className='line';r.innerHTML=`<div class="l-name">${label(x)}</div>`;c.appendChild(r);});
 }
-function renderWizBuckets(){
-  const c=document.getElementById('w-buck'); if(!c)return; c.innerHTML='';
-  S.buckets.forEach((b,i)=>{
-    const row=document.createElement('div');row.className='line';
-    row.innerHTML=`<div style="flex:1"><div class="l-name" data-n="${i}">${escapeHtml(b.name)}</div></div>
-    <div style="display:flex;align-items:center;gap:8px"><input type="number" value="${b.pct}" style="width:62px;text-align:right;padding:7px 9px"><span class="mono" style="font-size:11px">%</span><span class="del" data-d="${i}">×</span></div>`;
-    row.querySelector('input').oninput=e=>{S.buckets[i].pct=parseFloat(e.target.value)||0;wizBuckSum();};
-    row.querySelector('[data-d]').onclick=()=>{S.buckets.splice(i,1);renderWizBuckets();};
-    row.querySelector('[data-n]').onclick=()=>{const v=prompt('Bucket name',b.name);if(v!=null){S.buckets[i].name=v;renderWizBuckets();}};
-    c.appendChild(row);
-  });
-  wizBuckSum();
-}
-function wizBuckSum(){const sum=S.buckets.reduce((t,b)=>t+(b.pct||0),0);const e=document.getElementById('w-buck-sum');if(e){e.textContent='Total '+sum+'%';e.style.color=sum===100?'var(--bs-blue)':'var(--neg)';}}
 
 function wizCommit(){
   const step=WIZ.order[WIZ.step];
@@ -1187,13 +1408,24 @@ function wizCommit(){
       {name:document.getElementById('w-n2').value.trim()||'Lola',income:parseFloat(document.getElementById('w-i2').value)||0}];
     saveSettings(); buildWho();
   }
-  else if(step==='buckets'){
-    const sum=S.buckets.reduce((t,b)=>t+(b.pct||0),0);
-    if(sum!==100 && !confirm('Buckets total '+sum+'%, not 100%. Continue anyway?'))return false;
-    saveBuck();
+  else if(step==='joint'){
+    saveJoint();
   }
   return true;
 }
+
+/* ============ kick off (all functions from both script blocks now exist) ============ */
+(function startApp(){
+  if(gateNeeded() && localStorage.getItem('bs_budget:unlocked')!=='1'){
+    document.getElementById('gate').classList.add('on');
+    const gi=document.getElementById('gate-input');
+    gi.addEventListener('keydown',e=>{ if(e.key==='Enter')tryGate(); });
+    gi.addEventListener('input',()=>{ if(gi.value.length===4)tryGate(); });
+    setTimeout(()=>gi.focus(),50);
+    return;
+  }
+  boot();
+})();
 </script>
 </body>
 </html>
